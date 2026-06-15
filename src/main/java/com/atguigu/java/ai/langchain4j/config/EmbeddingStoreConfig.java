@@ -48,12 +48,12 @@ public class EmbeddingStoreConfig {
                 // 2. 设置索引名称 (Index Name)
                 // 指定要连接的 Pinecone 索引名为 "xiaozhi-index"
                 // 如果该索引不存在且配置了 createIndex，SDK 会尝试自动创建
-                .index("xiaozhi-index")
+                .index("yunzhen-index")
 
                 // 3. 设置命名空间 (Namespace)
                 // Pinecone 允许在一个索引内通过 Namespace 隔离不同的数据集
                 // 例如：可以用 "chat-history" 存聊天记录，用 "knowledge-base" 存知识库
-                .nameSpace("xiaozhi-namespace")
+                .nameSpace("yunzhen-namespace")
 
                 // 4. 配置自动创建索引的策略 (Create Index Config)
                 // 只有当指定的 index 不存在时，以下配置才会生效并尝试创建新索引
