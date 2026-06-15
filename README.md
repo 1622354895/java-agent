@@ -339,3 +339,7 @@ mvn -Dtest=MedicalAgentEvalTest#runAppointmentToolStateEval -DrunToolEval=true t
 - 医疗安全边界覆盖急症提醒、非医疗拒答、Prompt 注入防护和敏感字段识别。
 - API Key 不应写入代码或提交到仓库。
 - 本项目用于医疗导诊和预约场景原型，回答不能替代医生诊断。
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
