@@ -1,6 +1,18 @@
-# 云诊助手 Agent
+# 云诊助手 Agent 后端
 
 云诊助手 Agent 是一个基于 Spring Boot 和 LangChain4j 的医疗导诊智能体后端项目，面向模拟互联网医院的咨询导诊、知识库问答、号源查询、预约挂号和取消预约场景。项目重点是后端 Agent 编排、RAG 检索增强、Tool Calling 业务执行和多轮会话记忆。
+
+本仓库是后端代码仓库。项目已与前端页面完成联调，前端代码位于本地：
+
+```text
+D:\Java-AI\xiaozhi-ui
+```
+
+前端基于 Vue 3 + Vite，开发环境通过 Vite 代理访问后端接口：
+
+```text
+POST /api/xiaozhi/chat -> http://localhost:8080/xiaozhi/chat
+```
 
 ## 核心功能
 
@@ -10,9 +22,11 @@
 - 真实号源查询：基于 `doctor_schedule` 医生排班表查询科室、医生、日期、时间对应的剩余号源。
 - 预约挂号：通过 LangChain4j Tool Calling 抽取姓名、身份证号、科室、日期、时间、医生等参数，查询真实排班并扣减号源。
 - 取消预约：查询预约记录，取消成功后释放对应医生排班号源。
-- 流式输出：基于 Spring WebFlux 返回 `Flux<String>`，支持大模型回答的流式响应。
+- 流式输出：基于 Spring WebFlux 返回 `Flux<String>`，支持前端逐段展示大模型回答。
 
 ## 技术栈
+
+后端：
 
 - Java 17
 - Spring Boot 3.2.6
@@ -25,6 +39,13 @@
 - Spring WebFlux
 - Knife4j
 - JUnit 5 / Mockito
+
+前端联调环境：
+
+- Vue 3
+- Vite
+- Element Plus
+- Axios
 
 ## 项目结构
 
@@ -159,7 +180,7 @@ testUploadKnowledgeLibrary()
 
 该方法会读取外部知识文档并写入 Pinecone。切换 index 或 namespace 后，需要重新上传知识库。
 
-## 启动项目
+## 后端启动
 
 进入后端目录：
 
@@ -185,12 +206,52 @@ mvn spring-boot:run
 8080
 ```
 
+## 前后端联调
+
+先启动后端：
+
+```powershell
+cd D:\Java-AI\java-ai-langchain4j
+mvn spring-boot:run
+```
+
+再启动前端：
+
+```powershell
+cd D:\Java-AI\xiaozhi-ui
+npm install
+npm run dev
+```
+
+前端默认访问地址：
+
+```text
+http://localhost:5173
+```
+
+联调链路：
+
+```text
+浏览器页面
+-> Vue 前端 /api/xiaozhi/chat
+-> Vite proxy
+-> Spring Boot 后端 /xiaozhi/chat
+-> LangChain4j Agent
+-> RAG / Tool Calling / MongoDB / MySQL / Pinecone
+```
+
 ## 对话接口
 
-接口地址：
+后端接口地址：
 
 ```text
 POST /xiaozhi/chat
+```
+
+前端代理地址：
+
+```text
+POST /api/xiaozhi/chat
 ```
 
 请求体格式：
@@ -222,6 +283,7 @@ mvn -Dtest=AppointmentToolsTest test
 
 ## 当前说明
 
+- 本仓库只包含后端代码，前端代码在本地 `D:\Java-AI\xiaozhi-ui`。
 - 项目已经接入真实排班表，`queryDepartment` 不再是固定返回有号源的占位实现。
 - 号源扣减使用数据库条件更新 `remaining_quota > 0`，避免并发下超卖。
 - 取消预约会先查预约和排班，再删除预约并释放号源。
