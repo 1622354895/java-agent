@@ -1,6 +1,6 @@
-# 小智医疗 Agent
+# 云诊助手 Agent
 
-小智医疗 Agent 是一个基于 Spring Boot 和 LangChain4j 的医疗导诊智能体后端项目，面向模拟医院客服、科室导诊、医疗知识问答和预约挂号场景。项目核心是后端 Agent 能力，前端页面不是本项目重点。
+云诊助手 Agent 是一个基于 Spring Boot 和 LangChain4j 的医疗导诊智能体后端项目，面向模拟医院客服、科室导诊、医疗知识问答和预约挂号场景。项目核心是后端 Agent 能力，前端页面不是本项目重点。
 
 ## 核心功能
 
@@ -28,7 +28,7 @@
 ```text
 src/main/java/com/atguigu/java/ai/langchain4j
 ├── XiaozhiApp.java                         # Spring Boot 启动类
-├── assistant/XiaozhiAgent.java             # 小智医疗 Agent 编排入口
+├── assistant/XiaozhiAgent.java             # 云诊助手 Agent 编排入口
 ├── config/XiaozhiAgentConfig.java          # 会话记忆和 RAG 检索器配置
 ├── config/EmbeddingStoreConfig.java        # Pinecone 向量库配置
 ├── controller/XiaozhiController.java       # 对话接口
