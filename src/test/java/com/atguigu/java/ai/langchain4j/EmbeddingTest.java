@@ -1,6 +1,7 @@
 package com.atguigu.java.ai.langchain4j;
 
 import dev.langchain4j.data.document.Document;
+import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -142,22 +144,93 @@ public class EmbeddingTest {
     }
 
 
+//    @Test
+//    public void testUploadKnowledgeLibrary() {
+//
+//        //使用FileSystemDocumentLoader读取指定目录下的知识库文档
+//        //并使用默认的文档解析器对文档进行解析
+//        Document document1 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/医院信息.md");
+//        Document document2 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/科室信息.md");
+//        Document document3 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/神经内科.md");
+//        List<Document> documents = Arrays.asList(document1, document2, document3);
+//
+//        //文本向量化并存入向量数据库：将每个片段进行向量化，得到一个嵌入向量
+//        EmbeddingStoreIngestor
+//                .builder()
+//                .embeddingStore(embeddingStore)
+//                .embeddingModel(embeddingModel)
+//                .build()
+//                .ingest(documents);
+//    }
+
+    /**
+     * 这段代码实现知识库上传功能：
+     *
+     * 1. **加载文档**：读取三个Markdown文件并分段处理
+     * 2. **文本分段**：按段落分割，每段最多700字符，超长文本进一步切分
+     * 3. **添加元数据**：为每个文本片段添加文件名标记和来源标识
+     * 4. **向量化存储**：使用嵌入模型生成向量，批量存入向量数据库
+     */
+
     @Test
     public void testUploadKnowledgeLibrary() {
+        List<TextSegment> segments = new ArrayList<>();
 
-        //使用FileSystemDocumentLoader读取指定目录下的知识库文档
-        //并使用默认的文档解析器对文档进行解析
-        Document document1 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/医院信息.md");
-        Document document2 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/科室信息.md");
-        Document document3 = FileSystemDocumentLoader.loadDocument("D:/Java-AI/神经内科.md");
-        List<Document> documents = Arrays.asList(document1, document2, document3);
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/医院信息.md", "医院信息.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/科室信息.md", "科室信息.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/神经内科.md", "神经内科.md"));
 
-        //文本向量化并存入向量数据库：将每个片段进行向量化，得到一个嵌入向量
-        EmbeddingStoreIngestor
-                .builder()
-                .embeddingStore(embeddingStore)
-                .embeddingModel(embeddingModel)
-                .build()
-                .ingest(documents);
+        List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+
+        embeddingStore.addAll(embeddings, segments);
+    }
+
+    private List<TextSegment> loadSegmentsWithSource(String path, String fileName) {
+        Document document = FileSystemDocumentLoader.loadDocument(path);
+
+        List<TextSegment> segments = new ArrayList<>();
+        String[] paragraphs = document.text().split("\\R\\s*\\R");
+
+        StringBuilder current = new StringBuilder();
+        int maxChars = 700;
+
+        for (String paragraph : paragraphs) {
+            String text = paragraph.trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+
+            if (current.length() + text.length() + 2 > maxChars && current.length() > 0) {
+                segments.add(buildSegment(fileName, current.toString()));
+                current.setLength(0);
+            }
+
+            if (text.length() > maxChars) {
+                for (int start = 0; start < text.length(); start += maxChars) {
+                    int end = Math.min(start + maxChars, text.length());
+                    segments.add(buildSegment(fileName, text.substring(start, end)));
+                }
+            } else {
+                if (current.length() > 0) {
+                    current.append("\n\n");
+                }
+                current.append(text);
+            }
+        }
+
+        if (current.length() > 0) {
+            segments.add(buildSegment(fileName, current.toString()));
+        }
+
+        return segments;
+    }
+
+    private TextSegment buildSegment(String fileName, String text) {
+        Metadata metadata = Metadata.from("file_name", fileName);
+
+        return TextSegment.from(
+                "【文档来源：" + fileName + "】\n" + text,
+                metadata
+        );
     }
 }

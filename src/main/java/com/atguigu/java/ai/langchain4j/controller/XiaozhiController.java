@@ -3,6 +3,7 @@ package com.atguigu.java.ai.langchain4j.controller;
 
 import com.atguigu.java.ai.langchain4j.assistant.XiaozhiAgent;
 import com.atguigu.java.ai.langchain4j.bean.ChatForm;
+import com.atguigu.java.ai.langchain4j.service.SafetyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ public class XiaozhiController {
     @Autowired
     private XiaozhiAgent xiaozhiagent;
 
+    @Autowired
+    private SafetyService safetyService; // 注入安全服务
+
     /**
      * 处理聊天请求的 API 端点
      * 接收前端发送的 ChatForm 对象，提取会话 ID 和用户消息，调用智能体生成回复
@@ -69,7 +73,29 @@ public class XiaozhiController {
 //        return xiaozhiagent.chat(chatForm.getMemoryId(), chatForm.getMessage());
 //    }
     public Flux<String> chat(@RequestBody ChatForm chatForm  ){           //改为返回 Flux<String>，流式输出
-        // 从请求表单中提取会话 ID 和用户消息，调用智能体的 chat 方法获取 AI 回复
+
+        /*
+        *
+        * 急症问题 -> 不进大模型，直接急诊提醒
+            Prompt 注入 -> 不进大模型，直接拒绝
+            明显非医疗问题 -> 不进大模型，直接拒答
+            正常导诊/预约/RAG -> 继续走原来的 Agent
+        * */
+
+        // 1. 前置安全校验：在调用大模型之前，对用户输入做确定性规则检查
+        // 覆盖三类拦截：Prompt 注入攻击、急症高风险、非医疗无关内容
+        SafetyService.SafetyCheckResult safetyResult =
+                safetyService.checkInput(chatForm.getMessage());
+
+        // 2. 命中拦截规则：直接返回预设的安全回复，不调用大模型、不执行 RAG 检索
+        // 优势：毫秒级响应、零 API 成本、结果100%可控，从源头规避安全风险
+        if (safetyResult.blocked()) {
+            // Flux.just 将单条文本包装为响应式流，与接口返回类型保持一致
+            return Flux.just(safetyResult.reply());
+        }
+
+        // 3. 正常业务请求：提取会话ID和用户消息，调用智能体执行完整对话流程
+        // 内部包含多轮记忆、RAG 知识库检索、工具调用、大模型生成全链路，流式返回结果
         return xiaozhiagent.chat(chatForm.getMemoryId(), chatForm.getMessage());
     }
 }
