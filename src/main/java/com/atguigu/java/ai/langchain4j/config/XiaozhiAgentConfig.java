@@ -23,6 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 // 导入 Spring 配置类注解
 import org.springframework.context.annotation.Configuration;
+import com.atguigu.java.ai.langchain4j.mapper.RagTraceMapper;
+import com.atguigu.java.ai.langchain4j.rag.ObservableContentRetriever;
 
 import java.util.Arrays;
 import java.util.List;
@@ -46,6 +48,9 @@ public class XiaozhiAgentConfig {
 
     @Autowired
     private EmbeddingStore embeddingStore;  // 嵌入存储实例
+
+    @Autowired
+    private RagTraceMapper ragTraceMapper; // RAG 链路追踪
 
     /**
      * 创建并返回小智智能体的记忆提供者 Bean
@@ -164,21 +169,42 @@ public class XiaozhiAgentConfig {
      * 3. **用途**：从Pinecone向量数据库中检索与查询最相似的文本内容，用于RAG场景
      * @return
      */
+//    @Bean
+//    ContentRetriever contentRetrieverXiaozhiPincone() {
+//
+//        // 创建一个 EmbeddingStoreContentRetriever 对象，用于从嵌入存储中检索内容
+//        return EmbeddingStoreContentRetriever
+//                .builder()
+//                // 设置用于生成嵌入向量的嵌入模型
+//                .embeddingModel(embeddingModel)
+//                // 指定要使用的嵌入存储
+//                .embeddingStore(embeddingStore)
+//                // 设置最大检索结果数量，这里表示最多返回 1 条匹配结果
+//                .maxResults(1)
+//                // 设置最小得分阈值，只有得分大于等于 0.8 的结果才会被返回
+//                .minScore(0.8)
+//                // 构建最终的 EmbeddingStoreContentRetriever 实例
+//                .build();
+//    }
+
+    /**
+     * 这是一个Spring Bean配置方法：
+     * 创建代理检索器：构建基于向量存储的内容检索器，设置最多返回3条结果、最低相似度0.7
+     * 包装追踪功能：用ObservableContentRetriever包装原始检索器，实现RAG检索过程的追踪记录
+     * 注入依赖：使用嵌入模型、向量存储和追踪Mapper完成初始化
+     * @return
+     */
     @Bean
     ContentRetriever contentRetrieverXiaozhiPincone() {
 
-        // 创建一个 EmbeddingStoreContentRetriever 对象，用于从嵌入存储中检索内容
-        return EmbeddingStoreContentRetriever
+        ContentRetriever delegate = EmbeddingStoreContentRetriever
                 .builder()
-                // 设置用于生成嵌入向量的嵌入模型
                 .embeddingModel(embeddingModel)
-                // 指定要使用的嵌入存储
                 .embeddingStore(embeddingStore)
-                // 设置最大检索结果数量，这里表示最多返回 1 条匹配结果
                 .maxResults(1)
-                // 设置最小得分阈值，只有得分大于等于 0.8 的结果才会被返回
                 .minScore(0.8)
-                // 构建最终的 EmbeddingStoreContentRetriever 实例
                 .build();
+
+        return new ObservableContentRetriever(delegate, ragTraceMapper);
     }
 }

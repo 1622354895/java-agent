@@ -18,18 +18,17 @@ POST /api/xiaozhi/chat -> http://localhost:8080/xiaozhi/chat
 
 - 医疗导诊问答：根据用户症状和就医需求，提供科室推荐、就医流程和常见医疗咨询回答。
 - 多轮会话记忆：基于 `memoryId` 隔离不同会话，并使用 MongoDB 持久化聊天记录。
-- RAG 知识库增强：将医院信息、科室信息、神经内科等知识文档向量化写入 Pinecone，回答时进行语义检索增强。
-- RAG 引用来源：知识库片段带有文档来源标记，回答使用知识库内容时输出参考来源。
+- RAG 知识库增强：将医院信息、科室信息、神经内科和常见症状导诊等 Markdown 知识文档向量化写入 Pinecone，回答时进行语义检索增强。
+- RAG 引用来源：知识库片段带有 `【文档来源：xxx.md】` 标记，回答使用知识库内容时在末尾输出参考来源。
+- RAG 检索追踪：通过包装 LangChain4j `ContentRetriever` 记录用户问题、命中文档、相似度、命中文本摘要和时间，便于排查知识库召回质量。
 - 真实号源查询：基于 `doctor_schedule` 医生排班表查询科室、医生、日期、时间对应的剩余号源。
 - 预约挂号：通过 LangChain4j Tool Calling 抽取姓名、身份证号、科室、日期、时间、医生等参数，查询真实排班并扣减号源。
 - 取消预约：查询预约记录，取消成功后释放对应医生排班号源。
 - 医疗安全边界：支持急症提醒、非医疗问题拒答、Prompt 注入防护和敏感信息识别。
 - 流式输出：基于 Spring WebFlux 返回 `Flux<String>`，支持前端逐段展示大模型回答。
-- Agent 自动评测：提供回答质量评测和 Tool Calling 数据库状态评测。
+- Agent 自动评测：提供回答质量评测、Tool Calling 数据库状态评测和 RAG 追踪测试。
 
 ## 技术栈
-
-后端：
 
 - Java 17
 - Spring Boot 3.2.6
@@ -60,11 +59,14 @@ src/main/java/com/atguigu/java/ai/langchain4j
 ├── config/EmbeddingStoreConfig.java
 ├── controller/XiaozhiController.java
 ├── store/MongoChatMemoryStore.java
+├── rag/ObservableContentRetriever.java
 ├── tools/appointmentTools.java
 ├── entity/Appointment.java
 ├── entity/DoctorSchedule.java
+├── entity/RagTrace.java
 ├── mapper/AppointmentMapper.java
 ├── mapper/DoctorScheduleMapper.java
+├── mapper/RagTraceMapper.java
 ├── service/AppointmentService.java
 ├── service/DoctorScheduleService.java
 ├── service/SafetyService.java
@@ -92,7 +94,7 @@ setx DASHSCOPE_API_KEY "你的 DashScope API Key"
 setx PINECONE_API_KEY "你的 Pinecone API Key"
 ```
 
-`setx` 设置后需要重启 IDEA 或终端才会生效。
+`setx` 设置后需要重启 IDEA 或终端才会生效。不要把真实 Key 写入代码或提交到 GitHub。
 
 ## 数据库配置
 
@@ -116,13 +118,13 @@ spring.datasource.password=root
 CREATE DATABASE IF NOT EXISTS guiguixiaozhi
   DEFAULT CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
+
+USE guiguixiaozhi;
 ```
 
 预约表：
 
 ```sql
-USE guiguixiaozhi;
-
 CREATE TABLE IF NOT EXISTS appointment (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   username VARCHAR(64),
@@ -150,6 +152,19 @@ CREATE TABLE IF NOT EXISTS doctor_schedule (
 );
 ```
 
+RAG 检索追踪表：
+
+```sql
+CREATE TABLE IF NOT EXISTS rag_trace (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  question TEXT NOT NULL COMMENT '用户问题',
+  source_file VARCHAR(128) COMMENT '命中文档',
+  score DOUBLE COMMENT '相似度',
+  text_preview TEXT COMMENT '命中文本摘要',
+  created_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+);
+```
+
 示例号源：
 
 ```sql
@@ -171,21 +186,104 @@ index: yunzhen-index
 namespace: yunzhen-namespace
 ```
 
+Embedding 模型使用 DashScope `text-embedding-v3`。
+
 知识库上传入口：
 
 ```text
 src/test/java/com/atguigu/java/ai/langchain4j/EmbeddingTest.java
 ```
 
-运行方法：
+基础医院知识库上传：
 
 ```text
 testUploadKnowledgeLibrary()
 ```
 
-该方法会读取外部知识文档并写入 Pinecone。每个入库片段会带有类似 `【文档来源：神经内科.md】` 的来源标记，用于回答末尾输出参考来源。
+导诊知识库上传：
+
+```text
+testUploadTriageKnowledgeLibrary()
+```
+
+导诊知识库读取本地 Markdown 文件：
+
+```text
+D:\Java-AI\常见症状导诊.md
+D:\Java-AI\急症识别规则.md
+D:\Java-AI\发热导诊.md
+D:\Java-AI\头痛头晕导诊.md
+D:\Java-AI\腹痛导诊.md
+D:\Java-AI\皮肤问题导诊.md
+D:\Java-AI\预约挂号规则.md
+D:\Java-AI\复诊与检查流程.md
+```
+
+上传命令示例：
+
+```powershell
+cd D:\Java-AI\java-ai-langchain4j
+
+$env:JAVA_HOME='D:\javajdk17'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+
+& 'D:\Java\JavaWeb\apache-maven-3.9.4\bin\mvn.cmd' `
+  "-Dmaven.repo.local=D:\Java\JavaWeb\apache-maven-3.9.4\mvn_repo" `
+  "-Dtest=EmbeddingTest#testUploadTriageKnowledgeLibrary" test
+```
+
+每个入库片段会带有类似 `【文档来源：神经内科.md】` 的来源标记，并写入 `file_name` 元数据，用于回答末尾输出参考来源和 RAG 检索追踪。
 
 切换 Pinecone index 或 namespace 后，需要清空旧 namespace 或切换新 namespace，并重新上传知识库。
+
+## RAG 检索追踪
+
+当前 RAG 检索器配置在 `XiaozhiAgentConfig`：
+
+```java
+ContentRetriever delegate = EmbeddingStoreContentRetriever
+        .builder()
+        .embeddingModel(embeddingModel)
+        .embeddingStore(embeddingStore)
+        .maxResults(1)
+        .minScore(0.7)
+        .build();
+
+return new ObservableContentRetriever(delegate, ragTraceMapper);
+```
+
+含义：
+
+- `maxResults(1)`：每次只返回相似度最高的一条知识片段，避免多个来源混入回答。
+- `minScore(0.7)`：低于 0.7 的召回结果会被过滤。
+- `ObservableContentRetriever`：不改变原检索结果，只在检索成功后写入 `rag_trace` 表。
+
+`rag_trace` 记录字段：
+
+```text
+question      用户问题
+source_file   命中文档
+score         相似度
+text_preview  命中文本摘要
+created_time  检索时间
+```
+
+查询最近 RAG 命中记录：
+
+```sql
+SELECT
+  id,
+  question,
+  source_file,
+  score,
+  LEFT(text_preview, 120) AS preview,
+  created_time
+FROM rag_trace
+ORDER BY id DESC
+LIMIT 20;
+```
+
+当前版本没有记录 `memoryId`。这是有意保持第一版简单，后续如果要按会话追踪完整检索链路，可以再扩展 `memory_id` 字段。
 
 ## 后端启动
 
@@ -243,8 +341,10 @@ http://localhost:5173
 -> Vue 前端 /api/xiaozhi/chat
 -> Vite proxy
 -> Spring Boot 后端 /xiaozhi/chat
+-> SafetyService
 -> LangChain4j Agent
--> SafetyService / RAG / Tool Calling / MongoDB / MySQL / Pinecone
+-> RAG / Tool Calling / MongoDB / MySQL / Pinecone
+-> ObservableContentRetriever 写入 rag_trace
 ```
 
 ## 对话接口
@@ -294,6 +394,14 @@ mvn -Dtest=AppointmentToolsTest test
 mvn -Dtest=SafetyServiceTest test
 ```
 
+RAG 检索追踪测试：
+
+```powershell
+mvn -Dtest=RagTraceTest test
+```
+
+该测试会调用真实 Pinecone 检索，并验证 `rag_trace` 表是否新增追踪记录。
+
 Agent 回答质量评测：
 
 ```powershell
@@ -334,8 +442,9 @@ mvn -Dtest=MedicalAgentEvalTest#runAppointmentToolStateEval -DrunToolEval=true t
 - 本仓库只包含后端代码，前端代码在本地 `D:\Java-AI\xiaozhi-ui`。
 - 项目已接入真实排班表，`queryDepartment` 不再是固定返回有号源的占位实现。
 - 号源扣减使用数据库条件更新 `remaining_quota > 0`，避免并发下超卖。
-- 取消预约会先查预约和排班，再删除预约并释放号源。
+- 取消预约会先查预约和排班，再删除预约并释放号源；释放失败时回滚取消操作。
 - RAG 回答会在使用知识库内容时输出参考来源。
+- RAG 检索链路会记录命中文档、相似度和片段摘要到 `rag_trace`。
 - 医疗安全边界覆盖急症提醒、非医疗拒答、Prompt 注入防护和敏感字段识别。
 - API Key 不应写入代码或提交到仓库。
 - 本项目用于医疗导诊和预约场景原型，回答不能替代医生诊断。

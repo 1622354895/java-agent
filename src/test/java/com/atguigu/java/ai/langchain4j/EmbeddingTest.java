@@ -185,6 +185,24 @@ public class EmbeddingTest {
         embeddingStore.addAll(embeddings, segments);
     }
 
+    @Test
+    public void testUploadTriageKnowledgeLibrary() {
+        List<TextSegment> segments = new ArrayList<>();
+
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/常见症状导诊.md", "常见症状导诊.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/急症识别规则.md", "急症识别规则.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/发热导诊.md", "发热导诊.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/头痛头晕导诊.md", "头痛头晕导诊.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/腹痛导诊.md", "腹痛导诊.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/皮肤问题导诊.md", "皮肤问题导诊.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/预约挂号规则.md", "预约挂号规则.md"));
+        segments.addAll(loadSegmentsWithSource("D:/Java-AI/复诊与检查流程.md", "复诊与检查流程.md"));
+
+        List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+
+        embeddingStore.addAll(embeddings, segments);
+    }
+
     private List<TextSegment> loadSegmentsWithSource(String path, String fileName) {
         Document document = FileSystemDocumentLoader.loadDocument(path);
 
